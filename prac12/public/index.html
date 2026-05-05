@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎨 Reconocedor de Dígitos MNIST</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .canvas-section {
+            margin-bottom: 30px;
+        }
+
+        .label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #333;
+            font-size: 1.1em;
+        }
+
+        canvas {
+            border: 3px solid #667eea;
+            border-radius: 10px;
+            cursor: crosshair;
+            background: black;
+            display: block;
+            margin: 0 auto;
+            width: 100%;
+            max-width: 300px;
+            height: auto;
+            aspect-ratio: 1;
+            touch-action: none;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            font-size: 1em;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-predict {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .btn-predict:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-predict:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-clear {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-clear:hover {
+            background: #e0e0e0;
+            transform: translateY(-2px);
+        }
+
+        .result-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 10px;
+            display: none;
+        }
+
+        .result-section.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result-digit {
+            font-size: 3em;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .confidence-box {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .confidence-high {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+
+        .confidence-low {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            color: #856404;
+        }
+
+        .confidence-text {
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .probabilities {
+            margin-top: 20px;
+        }
+
+        .prob-title {
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .prob-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+
+        .prob-digit {
+            min-width: 30px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .prob-bar-fill {
+            flex: 1;
+            height: 24px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 4px;
+            position: relative;
+        }
+
+        .prob-value {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: white;
+            font-weight: 600;
+            font-size: 0.85em;
+        }
+
+        .loading {
+            text-align: center;
+            color: #667eea;
+            font-weight: 600;
+            display: none;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .error {
+            background: #f8d7da;
+            border: 2px solid #f5c6cb;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 8px;
+            display: none;
+            margin-top: 10px;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .info {
+            text-align: center;
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 25px;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+
+            .result-digit {
+                font-size: 2.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 Reconocedor de Dígitos</h1>
+            <p class="subtitle">Dibuja un número (0-9) en el recuadro</p>
+        </div>
+
+        <div class="canvas-section">
+            <label class="label">Dibuja aquí:</label>
+            <canvas id="canvas" width="280" height="280"></canvas>
+
+            <div class="button-group">
+                <button class="btn-predict" id="predictBtn" onclick="predict()">Predecir</button>
+                <button class="btn-clear" id="clearBtn" onclick="clearCanvas()">Limpiar</button>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">⏳ Analizando...</div>
+
+        <div class="error" id="error"></div>
+
+        <div class="result-section" id="resultSection">
+            <div class="result-digit" id="resultDigit"></div>
+
+            <div class="confidence-box" id="confidenceBox">
+                <div class="confidence-text" id="confidenceText"></div>
+            </div>
+
+            <div class="probabilities">
+                <div class="prob-title">Probabilidades por dígito:</div>
+                <div id="probabilitiesChart"></div>
+            </div>
+        </div>
+
+        <div class="info">
+            💡 Intenta dibujar números claros y centrados para mejores resultados
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+
+        // Configurar DPI para canvas nítido
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = 280 * dpr;
+        canvas.height = 280 * dpr;
+        ctx.scale(dpr, dpr);
+
+        // Dibujo
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            ctx.lineWidth = 20;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = 'white';
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+        });
+
+        // Touch support
+        canvas.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            ctx.lineWidth = 20;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = 'white';
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        });
+
+        function clearCanvas() {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('resultSection').classList.remove('show');
+            document.getElementById('error').classList.remove('show');
+        }
+
+        async function predict() {
+            const loading = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            const resultSection = document.getElementById('resultSection');
+
+            loading.classList.add('show');
+            errorDiv.classList.remove('show');
+
+            try {
+                // Obtener imagen como base64
+                const imageData = canvas.toDataURL('image/png');
+
+                // Enviar a API
+                const response = await fetch('/api/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: imageData })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Error en la predicción');
+                }
+
+                const data = await response.json();
+
+                // Mostrar resultado
+                displayResult(data);
+                resultSection.classList.add('show');
+
+            } catch (error) {
+                errorDiv.textContent = '❌ Error: ' + error.message;
+                errorDiv.classList.add('show');
+            } finally {
+                loading.classList.remove('show');
+            }
+        }
+
+        function displayResult(data) {
+            const digit = data.digit;
+            const confidence = data.confidence;
+            const probabilities = data.probabilities;
+
+            // Dígito predicho
+            document.getElementById('resultDigit').textContent = digit;
+
+            // Confianza
+            const confidenceBox = document.getElementById('confidenceBox');
+            const confidenceText = document.getElementById('confidenceText');
+            const percentage = (confidence * 100).toFixed(2);
+
+            if (confidence >= 0.80) {
+                confidenceBox.className = 'confidence-box confidence-high';
+                confidenceText.textContent = `✅ Confianza alta: ${percentage}%`;
+            } else {
+                confidenceBox.className = 'confidence-box confidence-low';
+                confidenceText.textContent = `⚠️ Confianza baja (${percentage}%). ¿Podrías dibujar más claro?`;
+            }
+
+            // Probabilidades
+            const chart = document.getElementById('probabilitiesChart');
+            chart.innerHTML = '';
+
+            probabilities.forEach((prob, digit) => {
+                const percentage = (prob * 100).toFixed(1);
+                const html = `
+                    <div class="prob-bar">
+                        <div class="prob-digit">${digit}</div>
+                        <div class="prob-bar-fill" style="width: ${prob * 100}%">
+                            <span class="prob-value">${percentage}%</span>
+                        </div>
+                    </div>
+                `;
+                chart.innerHTML += html;
+            });
+        }
+
+        // Inicializar canvas
+        clearCanvas();
+    </script>
+</body>
+</html>
