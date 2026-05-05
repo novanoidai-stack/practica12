@@ -33,5 +33,6 @@ modelo_mnist.keras
 .DS_Store
 Thumbs.db
 
-# Streamlit
-.streamlit/
+# Streamlit cache (pero permitir config.toml)
+.streamlit/*
+!.streamlit/config.toml
