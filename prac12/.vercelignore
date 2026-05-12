@@ -1,0 +1,9 @@
+app.py
+train_model.py
+train_model_sklearn.py
+DEPLOY_VERCEL.md
+INSTRUCCIONES_DEPLOY.md
+__pycache__
+*.pyc
+.venv
+venv

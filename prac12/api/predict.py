@@ -1,13 +1,14 @@
+from http.server import BaseHTTPRequestHandler
 import json
 import base64
+import os
+from io import BytesIO
+
 import joblib
 import numpy as np
 import cv2
-from io import BytesIO
 from PIL import Image
-import os
 
-# Cargar modelo y scaler
 MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'modelo_mnist.pkl')
 SCALER_PATH = os.path.join(os.path.dirname(__file__), '..', 'scaler.pkl')
 
@@ -15,81 +16,85 @@ try:
     model = joblib.load(MODEL_PATH)
     scaler = joblib.load(SCALER_PATH)
 except Exception as e:
-    print(f"Error cargando modelo: {e}")
     model = None
     scaler = None
+    _load_error = str(e)
+else:
+    _load_error = None
 
-def handler(request):
-    """
-    Endpoint para predicción MNIST
-    Espera: POST con JSON { "image": "base64_encoded_image" }
-    Retorna: { "digit": int, "confidence": float, "probabilities": [array] }
-    """
 
-    if request.method != 'POST':
-        return {
-            'statusCode': 405,
-            'body': json.dumps({'error': 'Only POST allowed'})
-        }
+def _predict(image_b64: str) -> dict:
+    if ',' in image_b64:
+        image_b64 = image_b64.split(',', 1)[1]
 
-    if model is None or scaler is None:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': 'Model not loaded'})
-        }
+    img_bytes = base64.b64decode(image_b64)
+    img = Image.open(BytesIO(img_bytes)).convert('RGB')
+    img_array = np.array(img)
 
-    try:
-        # Parsear request
-        body = json.loads(request.body) if isinstance(request.body, str) else request.body
-        img_base64 = body.get('image')
+    img_gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    img_8x8 = cv2.resize(img_gray, (8, 8), interpolation=cv2.INTER_AREA)
 
-        if not img_base64:
-            return {
-                'statusCode': 400,
-                'body': json.dumps({'error': 'No image provided'})
-            }
+    img_normalized = (255 - img_8x8) / 255.0
+    img_flat = img_normalized.flatten().reshape(1, -1)
+    img_scaled = scaler.transform(img_flat)
 
-        # Decodificar imagen base64
-        img_bytes = base64.b64decode(img_base64)
-        img = Image.open(BytesIO(img_bytes)).convert('RGB')
-        img_array = np.array(img)
+    pred_digit = int(model.predict(img_scaled)[0])
+    pred_proba = model.predict_proba(img_scaled)[0]
+    confidence = float(np.max(pred_proba))
 
-        # Convertir a escala de grises
-        img_gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    return {
+        'digit': pred_digit,
+        'confidence': round(confidence, 4),
+        'probabilities': [round(float(p), 4) for p in pred_proba],
+    }
 
-        # Redimensionar a 8x8
-        img_8x8 = cv2.resize(img_gray, (8, 8))
 
-        # Normalizar (invertir: negro=0, blanco=1)
-        img_normalized = 255 - img_8x8
-        img_normalized = img_normalized / 255.0
+class handler(BaseHTTPRequestHandler):
+    def _send_json(self, status: int, payload: dict):
+        body = json.dumps(payload).encode('utf-8')
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
-        # Aplanar
-        img_flat = img_normalized.flatten().reshape(1, -1)
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
 
-        # Aplicar scaler
-        img_scaled = scaler.transform(img_flat)
+    def do_GET(self):
+        self._send_json(200, {
+            'status': 'ok',
+            'model_loaded': model is not None and scaler is not None,
+            'usage': 'POST JSON {"image": "<base64>"} to this endpoint',
+        })
 
-        # Predicción
-        pred_digit = int(model.predict(img_scaled)[0])
-        pred_proba = model.predict_proba(img_scaled)[0]
-        confidence = float(np.max(pred_proba))
+    def do_POST(self):
+        if model is None or scaler is None:
+            self._send_json(500, {'error': f'Model not loaded: {_load_error}'})
+            return
 
-        # Respuesta
-        response = {
-            'digit': pred_digit,
-            'confidence': round(confidence, 4),
-            'probabilities': [round(float(p), 4) for p in pred_proba]
-        }
+        try:
+            length = int(self.headers.get('Content-Length', '0'))
+            raw = self.rfile.read(length).decode('utf-8') if length > 0 else ''
+            data = json.loads(raw) if raw else {}
+        except Exception as e:
+            self._send_json(400, {'error': f'Invalid JSON: {e}'})
+            return
 
-        return {
-            'statusCode': 200,
-            'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps(response)
-        }
+        image_b64 = data.get('image')
+        if not image_b64:
+            self._send_json(400, {'error': 'No image provided'})
+            return
 
-    except Exception as e:
-        return {
-            'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
-        }
+        try:
+            result = _predict(image_b64)
+        except Exception as e:
+            self._send_json(500, {'error': f'Prediction failed: {e}'})
+            return
+
+        self._send_json(200, result)
