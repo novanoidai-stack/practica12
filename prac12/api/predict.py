@@ -70,6 +70,10 @@ class handler(BaseHTTPRequestHandler):
         self._send_json(200, {
             'status': 'ok',
             'model_loaded': model is not None and scaler is not None,
+            'load_error': _load_error,
+            'cwd': os.getcwd(),
+            'file_dir': os.path.dirname(__file__),
+            'dir_contents': os.listdir(os.path.dirname(__file__)),
             'usage': 'POST JSON {"image": "<base64>"} to this endpoint',
         })
 
