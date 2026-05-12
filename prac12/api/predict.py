@@ -9,8 +9,8 @@ import numpy as np
 import cv2
 from PIL import Image
 
-MODEL_PATH = os.path.join(os.path.dirname(__file__), '..', 'modelo_mnist.pkl')
-SCALER_PATH = os.path.join(os.path.dirname(__file__), '..', 'scaler.pkl')
+MODEL_PATH = os.path.join(os.path.dirname(__file__), 'modelo_mnist.pkl')
+SCALER_PATH = os.path.join(os.path.dirname(__file__), 'scaler.pkl')
 
 try:
     model = joblib.load(MODEL_PATH)
